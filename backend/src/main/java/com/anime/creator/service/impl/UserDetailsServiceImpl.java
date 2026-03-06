@@ -20,8 +20,10 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        SysUser user = sysUserMapper.selectOne(com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper.<SysUser>lambdaQuery()
-                .eq(SysUser::getUsername, username));
+        SysUser user = sysUserMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysUser>()
+                        .eq(SysUser::getUsername, username)
+        );
         if (user == null) {
             throw new UsernameNotFoundException("用户不存在");
         }

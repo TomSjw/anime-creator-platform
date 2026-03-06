@@ -3,15 +3,19 @@ server:
   port: 8081
   servlet:
     context-path: /api
+    session:
+      cookie:
+        http-only: false
+        same-site: lax
 
 # Spring配置
 spring:
   # 数据源配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://127.0.0.1:3306/anime_creator?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
+    url: jdbc:mysql://localhost:3306/anime_creator?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
     username: root # 请修改为你的MySQL用户名
-    password: root # 请修改为你的MySQL密码
+    password: As+FjsU:9FdS # 请修改为你的MySQL密码
   
   # 文件上传配置
   servlet:
@@ -33,16 +37,16 @@ mybatis-plus:
 # Xxl-Job配置
 xxl:
   job:
-    # 调度中心部署跟地址 [选填]：如调度中心集群部署存在多个地址则用逗号分隔。
     admin:
-      addresses: http://127.0.0.1:8080/xxl-job-admin # 请修改为你的xxl-job调度中心地址
-    # 执行器通讯TOKEN [选填]：非空时启用；需要与调度中心配置保持一致
-    accessToken: default_token
-    # 执行器配置
+      addresses: ''   # 改为空，本地不用调度中心
+    accessToken: ''
     executor:
-      appname: anime-creator-executor # 执行器AppName
-      address:
-      ip:
-      port: 9999 # 执行器端口号
-      logpath: /data/applogs/xxl-job/jobhandler
+      appname: anime-creator-executor
+      address: ''
+      ip: ''
+      port: -1        # 改为 -1，禁用执行器端口
+      logpath: ./logs/xxl-job
       logretentiondays: 30
+# 成果文件存储路径（确保该目录存在，或程序会自动创建）
+storage:
+    path: C:/Users/shijunwei/anime-storage

@@ -45,15 +45,7 @@ const router = createRouter({
 
 // 路由守卫
 router.beforeEach((to, from, next) => {
-  // 简单的登录判断，实际可以根据后端返回的状态
-  const isLogin = document.cookie.includes('SESSION')
-  if (to.path === '/login') {
-    next()
-  } else if (!isLogin) {
-    next('/login')
-  } else {
-    next()
-  }
+  next()
 })
 
 export default router

@@ -47,6 +47,7 @@
         <dependency>
             <groupId>mysql</groupId>
             <artifactId>mysql-connector-java</artifactId>
+            <version>8.0.33</version>
             <scope>runtime</scope>
         </dependency>
 
@@ -62,6 +63,13 @@
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
             <version>4.11.0</version>
+        </dependency>
+
+        <!-- ✅ 修复：补充 fastjson 依赖（原代码中有使用但未声明） -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>fastjson</artifactId>
+            <version>2.0.32</version>
         </dependency>
 
         <!-- Lombok -->

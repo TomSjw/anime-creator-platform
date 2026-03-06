@@ -1,7 +1,7 @@
 <template>
-  <el-container style="height: 100vh; border: 1px solid #eee;">
+  <el-container style="height: 100vh;">
     <el-aside width="200px" style="background-color: rgb(247, 249, 251);">
-      <el-menu :default-active="activeIndex" class="el-menu-vertical-demo" @open="handleOpen" @close="handleClose" router>
+      <el-menu :default-active="activeIndex" router>
         <el-menu-item index="/">
           <el-icon><House /></el-icon>
           <span>首页</span>
@@ -24,12 +24,13 @@
         </el-menu-item>
       </el-menu>
     </el-aside>
+
     <el-container>
-      <el-header style="text-align: right; font-size: 12px;">
-        <span>私人动漫创作自动化工作平台</span>
-        <el-button type="text" @click="logout">退出登录</el-button>
+      <el-header style="display:flex; align-items:center; justify-content:space-between; border-bottom: 1px solid #eee;">
+        <span style="font-weight: bold;">私人动漫创作自动化工作平台</span>
+        <el-button link @click="logout">退出登录</el-button>
       </el-header>
-      <el-main>
+      <el-main style="background-color: #f5f7fa;">
         <router-view />
       </el-main>
     </el-container>
@@ -37,30 +38,25 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+// ✅ 修复：Vue3 script setup 无 this，直接 import axios 和 router
+import { ref, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { House, Picture, FolderOpened, Clock, Setting } from '@element-plus/icons-vue'
+import { axios } from './main.js'
 
 const router = useRouter()
-const activeIndex = ref(router.currentRoute.value.path)
+const route = useRoute()
+const activeIndex = ref(route.path)
 
-onMounted(() => {
-  router.afterEach((to) => {
-    activeIndex.value = to.path
-  })
+watch(() => route.path, (newPath) => {
+  activeIndex.value = newPath
 })
-
-const handleOpen = (key, keyPath) => {
-  console.log(key, keyPath)
-}
-const handleClose = (key, keyPath) => {
-  console.log(key, keyPath)
-}
 
 const logout = async () => {
   try {
-    await this.$axios.post('/auth/logout')
-  } catch(e) {}
+    await axios.post('/auth/logout')
+  } catch (e) { /* 忽略错误，强制跳转 */ }
+  localStorage.removeItem('isLoggedIn')  // ✅ 清除登录标记
   router.push('/login')
 }
 </script>
@@ -70,12 +66,5 @@ const logout = async () => {
   background-color: #fff;
   color: #333;
   line-height: 60px;
-  border-bottom: 1px solid #eee;
-}
-.el-aside {
-  color: #333;
-}
-.el-main {
-  background-color: #f5f7fa;
 }
 </style>
