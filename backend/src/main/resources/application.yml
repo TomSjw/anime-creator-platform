@@ -50,3 +50,11 @@ xxl:
 # 成果文件存储路径（确保该目录存在，或程序会自动创建）
 storage:
     path: C:/Users/shijunwei/anime-storage
+
+# 豆包 API 配置
+doubao:
+  api:
+    key: your-api-key-here
+    base-url: https://api.vncps.com/v1
+    model: doubao-seedream-3-0-t2i-250415
+    image-size: 1024x1024

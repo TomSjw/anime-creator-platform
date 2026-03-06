@@ -1,5 +1,6 @@
 package com.anime.creator.task;
 
+import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.anime.creator.dao.CreationResultMapper;
 import com.anime.creator.dao.TaskInfoMapper;
@@ -20,16 +21,11 @@ import org.springframework.stereotype.Component;
 import javax.annotation.Resource;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.util.Base64;
+import java.io.InputStream;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 动漫生成任务处理器
- *
- * ✅ 修复1：将核心逻辑抽取到 executeTask(Long taskId)，Controller 可直接调用。
- * ✅ 修复2：@XxlJob 方法通过 XxlJobHelper.getJobParam() 获取参数（原代码方法签名错误）。
- * ✅ 修复3：OkHttpClient 增加超时配置，避免长时间阻塞。
- * ✅ 修复4：Integer 参数获取方式使用默认值重载，避免空指针。
+ * 动漫生成任务处理器（使用豆包 API 生成图片）
  */
 @Component
 public class AnimeGenerateJobHandler {
@@ -43,7 +39,18 @@ public class AnimeGenerateJobHandler {
     @Value("${storage.path}")
     private String storagePath;
 
-    // ✅ 修复：OkHttpClient 设置合理超时，SD 生成耗时较长用 120s
+    @Value("${doubao.api.key}")
+    private String doubaoApiKey;
+
+    @Value("${doubao.api.base-url}")
+    private String doubaoBaseUrl;
+
+    @Value("${doubao.api.model}")
+    private String doubaoModel;
+
+    @Value("${doubao.api.image-size}")
+    private String doubaoImageSize;
+
     private final OkHttpClient client = new OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(120, TimeUnit.SECONDS)
@@ -53,12 +60,10 @@ public class AnimeGenerateJobHandler {
     private static final MediaType JSON_TYPE = MediaType.get("application/json; charset=utf-8");
 
     /**
-     * XxlJob 调度入口（由调度中心触发）
-     * ✅ 修复：无参方法 + 用 XxlJobHelper.getJobParam() 获取参数，原代码 execute(String param) 签名不兼容
+     * XxlJob 调度入口
      */
     @XxlJob("animeGenerateJob")
     public void xxlJobEntry() throws Exception {
-        // ✅ 正确方式：从 XxlJobHelper 获取调度中心传入的参数
         String param = XxlJobHelper.getJobParam();
         if (param == null || param.trim().isEmpty()) {
             XxlJobHelper.log("参数为空，任务跳过");
@@ -89,41 +94,62 @@ public class AnimeGenerateJobHandler {
             JSONObject param = JSONObject.parseObject(task.getParam());
             String prompt = param.getString("prompt");
             String style = param.getString("style");
-            // ✅ 修复：使用 getIntValue 避免空指针，提供默认值
-            int width = param.getIntValue("width") > 0 ? param.getIntValue("width") : 512;
-            int height = param.getIntValue("height") > 0 ? param.getIntValue("height") : 512;
 
-            // 3. 构造 Stable Diffusion 请求
-            JSONObject sdParam = new JSONObject();
-            sdParam.put("prompt", prompt + ", " + style + " anime style, high quality");
-            sdParam.put("negative_prompt", "ugly, blurry, low quality");
-            sdParam.put("width", width);
-            sdParam.put("height", height);
-            sdParam.put("steps", 20);
-            sdParam.put("cfg_scale", 7);
+            // 3. 构造豆包 API 请求
+            String fullPrompt = prompt + ", " + style + " anime style, high quality";
+            JSONObject requestBody = new JSONObject();
+            requestBody.put("model", doubaoModel);
+            requestBody.put("prompt", fullPrompt);
+            requestBody.put("size", doubaoImageSize);
+            requestBody.put("n", 1);
+            requestBody.put("response_format", "url");
 
-            RequestBody body = RequestBody.create(JSON_TYPE, sdParam.toJSONString());
+            RequestBody body = RequestBody.create(JSON_TYPE, requestBody.toJSONString());
             Request request = new Request.Builder()
-                    .url("http://127.0.0.1:7860/sdapi/v1/txt2img")
+                    .url(doubaoBaseUrl + "/images/generations")
+                    .addHeader("Authorization", "Bearer " + doubaoApiKey)
+                    .addHeader("Content-Type", "application/json")
                     .post(body)
                     .build();
 
             updateTask(task, null, 30, null);
 
-            // 4. 调用 SD API
-            String imageBase64;
+            // 4. 调用豆包 API
+            String imageUrl;
             try (Response response = client.newCall(request).execute()) {
                 if (!response.isSuccessful() || response.body() == null) {
-                    throw new RuntimeException("SD API 调用失败: " + response.code() + " " + response.message());
+                    throw new RuntimeException("豆包 API 调用失败: " + response.code() + " " + response.message());
                 }
                 JSONObject resultJson = JSONObject.parseObject(response.body().string());
-                imageBase64 = resultJson.getJSONArray("images").getString(0);
+                JSONArray dataArray = resultJson.getJSONArray("data");
+                if (dataArray == null || dataArray.isEmpty()) {
+                    throw new RuntimeException("豆包 API 返回数据为空");
+                }
+                imageUrl = dataArray.getJSONObject(0).getString("url");
+                if (imageUrl == null || imageUrl.isEmpty()) {
+                    throw new RuntimeException("豆包 API 未返回图片URL");
+                }
             }
 
-            updateTask(task, null, 70, null);
+            logger.info("豆包 API 生成图片成功, imageUrl={}", imageUrl);
+            updateTask(task, null, 60, null);
 
-            // 5. 保存图片到本地
-            byte[] imageBytes = Base64.getDecoder().decode(imageBase64);
+            // 5. 下载图片并保存到本地
+            Request downloadRequest = new Request.Builder()
+                    .url(imageUrl)
+                    .get()
+                    .build();
+
+            byte[] imageBytes;
+            try (Response downloadResponse = client.newCall(downloadRequest).execute()) {
+                if (!downloadResponse.isSuccessful() || downloadResponse.body() == null) {
+                    throw new RuntimeException("图片下载失败: " + downloadResponse.code());
+                }
+                try (InputStream is = downloadResponse.body().byteStream()) {
+                    imageBytes = is.readAllBytes();
+                }
+            }
+
             String fileName = System.currentTimeMillis() + ".png";
             String filePath = storagePath + File.separator + fileName;
             new File(storagePath).mkdirs();
@@ -163,9 +189,6 @@ public class AnimeGenerateJobHandler {
         }
     }
 
-    /**
-     * 便捷更新任务状态/进度
-     */
     private void updateTask(TaskInfo task, String status, Integer progress, String errorMsg) {
         if (status != null) task.setStatus(status);
         if (progress != null) task.setProgress(progress);
